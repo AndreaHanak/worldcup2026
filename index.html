@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -605,11 +604,55 @@ const ok = await saveResultToDB(matchId, parseInt(h.value), parseInt(a.value));
 if (ok) { showToast('✓ Result saved - points updated for everyone!'); renderMain(); }
 }
 
+
+// AUTO SCORE SYNC (TheSportsDB, free public data)
+const SCORES_ENABLED = true;
+const SCORES_ROUNDS = [1,2,3];
+const SCORES_API = 'https://www.thesportsdb.com/api/v1/json/123/eventsround.php?id=4429&s=2026&r=';
+const API_ALIAS = { 'Bosnia-Herzegovina':'Bosnia', 'Curacao':'Curacao', 'Czech Republic':'Czechia', 'DR Congo':'DRC', 'Turkey':'Turkiye' };
+const FINISHED_STATUS = ['FT','AET','AP','PEN','FT_PEN','Match Finished','After Extra Time','After Penalties'];
+
+function normTeam(n){ if(!n) return ''; n=String(n).trim(); return API_ALIAS[n] || n; }
+function teamKey(n){ return normTeam(n).toLowerCase().normalize('NFD').replace(/[^a-z]/g,''); }
+function pairKey(a,b){ return [teamKey(a),teamKey(b)].sort().join('|'); }
+function isFinishedEvent(e){
+if(e.intHomeScore==null || e.intAwayScore==null) return false;
+if(FINISHED_STATUS.indexOf(e.strStatus)!==-1) return true;
+if(e.strTimestamp){ const ko=new Date(e.strTimestamp+'Z').getTime(); if(!isNaN(ko) && Date.now() > ko + 150*60000) return true; }
+return false;
+}
+
+async function syncScores(){
+if(!SCORES_ENABLED || !isLoaded) return;
+let events = [];
+for(const r of SCORES_ROUNDS){
+try{ const j = await fetch(SCORES_API + r).then(x=>x.json()); if(j && j.events) events = events.concat(j.events); }catch(e){}
+}
+if(!events.length) return;
+const byPair = {};
+MATCHES.forEach(m => { if(m.home!=='TBD' && m.away!=='TBD') byPair[pairKey(m.home,m.away)] = m; });
+let updated = 0;
+for(const e of events){
+if(!isFinishedEvent(e)) continue;
+const hs = parseInt(e.intHomeScore), as = parseInt(e.intAwayScore);
+if(isNaN(hs) || isNaN(as)) continue;
+const m = byPair[pairKey(e.strHomeTeam, e.strAwayTeam)];
+if(!m) continue;
+let myH, myA;
+if(teamKey(m.home) === teamKey(e.strHomeTeam)){ myH = hs; myA = as; } else { myH = as; myA = hs; }
+const ex = getRes(m.id);
+if(ex && parseInt(ex.home)===myH && parseInt(ex.away)===myA) continue;
+const ok = await saveResultToDB(m.id, myH, myA);
+if(ok) updated++;
+}
+if(updated > 0) renderMain();
+}
+
 // INIT
 document.addEventListener('DOMContentLoaded', function() {
 renderPlayerChips();
 renderTabs();
-loadAll().then(() => subscribeRealtime());
+loadAll().then(() => { subscribeRealtime(); syncScores(); setInterval(syncScores, 120000); });
 });
 </script>
 </body>
