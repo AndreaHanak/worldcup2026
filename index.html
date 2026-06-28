@@ -124,6 +124,18 @@ body{font-family:'Inter',sans-serif;background:var(--navy);color:#fff;min-height
 .toast.show{transform:translateX(-50%) translateY(0);}
 .toast.error{background:var(--red);}
 @media(max-width:600px){.lb-breakdown{display:none;}.all-preds{grid-template-columns:repeat(2,1fr);}.save-btn{width:100%;margin-left:0;margin-top:8px;}}
+.adv-pick{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);}
+.adv-label{font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold-dim);margin-bottom:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.adv-hint{font-weight:500;letter-spacing:0;text-transform:none;color:rgba(255,255,255,0.3);}
+.adv-row{display:flex;gap:8px;}
+.adv-btn{flex:1;padding:11px 8px;border-radius:8px;border:1.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.7);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;}
+.adv-btn:hover{border-color:var(--gold-dim);}
+.adv-btn.active{border-color:var(--gold);background:rgba(201,168,76,0.15);color:#fff;box-shadow:0 0 0 1px rgba(201,168,76,0.3);}
+.adv-btn:disabled{cursor:default;opacity:0.8;}
+.adv-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);}
+.adv-ok{background:rgba(26,107,58,0.25);color:#4ADE80;}
+.adv-no{background:rgba(185,28,28,0.15);color:#FCA5A5;}
+.admin-btn.adv-set{background:rgba(201,168,76,0.2);color:var(--gold-light);}
 </style>
 </head>
 <body>
@@ -381,6 +393,18 @@ if (m.stage === 'qf') qf += pts;
 if (m.stage === 'sf') sf += pts;
 if (m.stage === 'final') fin += pts;
 }
+if (isKO(m.stage)) {
+const advp = getAdvPick(p.id, m.id);
+const acta = getActualAdvancer(m);
+if (advp && acta && advp === acta) {
+total += ADV_BONUS;
+if (m.stage === 'r32') r32 += ADV_BONUS;
+else if (m.stage === 'r16') r16 += ADV_BONUS;
+else if (m.stage === 'qf') qf += ADV_BONUS;
+else if (m.stage === 'sf') sf += ADV_BONUS;
+else if (m.stage === 'final') fin += ADV_BONUS;
+}
+}
 });
 return { ...p, total, grp, r32, r16, qf, sf, fin };
 }).sort((a, b) => b.total - a.total);
@@ -437,6 +461,14 @@ const btn = document.getElementById('btn_' + m.id);
 if (btn) btn.addEventListener('click', function() { handleSavePred(m.id); });
 const abtn = document.getElementById('abtn_' + m.id);
 if (abtn) abtn.addEventListener('click', function() { handleSaveResult(m.id); });
+const ah = document.getElementById('adv_' + m.id + '_h');
+if (ah) ah.addEventListener('click', function() { handleAdvPick(m.id, 'home'); });
+const aa = document.getElementById('adv_' + m.id + '_a');
+if (aa) aa.addEventListener('click', function() { handleAdvPick(m.id, 'away'); });
+const arh = document.getElementById('advr_' + m.id + '_h');
+if (arh) arh.addEventListener('click', function() { handleAdvResult(m.id, 'home'); });
+const ara = document.getElementById('advr_' + m.id + '_a');
+if (ara) ara.addEventListener('click', function() { handleAdvResult(m.id, 'away'); });
 });
 }
 
@@ -489,7 +521,7 @@ html += '<div class="lb-row ' + (i === 0 && hasPoints ? 'first' : '') + '">' +
 '</div>' +
 '<div class="lb-total">' + p.total + '</div></div>';
 });
-html += '</div><div style="text-align:center;padding:12px 0 8px;"><div style="font-size:11px;color:rgba(255,255,255,0.25);letter-spacing:0.1em;text-transform:uppercase;">3 pts exact · 1 pt correct result · Andrea enters results after each match</div></div>';
+html += '</div><div style="text-align:center;padding:12px 0 8px;"><div style="font-size:11px;color:rgba(255,255,255,0.25);letter-spacing:0.1em;text-transform:uppercase;">3 pts exact · 1 pt correct result · +1 correct advancer · Andrea enters results</div></div>';
 return html;
 }
 
@@ -550,6 +582,7 @@ html += '<div class="result-display"><div class="result-score">Result: ' + resul
 html += '</div></div>';
 }
 
+if (activePlayer && isKO(m.stage)) { html += renderAdvPicker(m); }
 html += '<div class="all-preds-title">Everyone\'s picks</div><div class="all-preds">' + allPreds + '</div>';
 
 if (isAdmin) {
@@ -560,10 +593,85 @@ html += '<div class="result-admin">' +
 '<input type="number" min="0" max="20" class="admin-input" id="res_' + m.id + '_a" value="' + rAVal + '" placeholder="0" oninput="clampInput(this)">' +
 '<button class="admin-btn" id="abtn_' + m.id + '">Set Result</button>' +
 '</div>';
+if (isKO(m.stage)) {
+const curAdv = getActualAdvancer(m);
+html += '<div class="result-admin">' +
+'<div class="result-admin-label">🥅 Who advanced (penalties / final)</div>' +
+'<button class="admin-btn' + (curAdv === 'home' ? ' adv-set' : '') + '" id="advr_' + m.id + '_h">' + m.home + '</button>' +
+'<button class="admin-btn' + (curAdv === 'away' ? ' adv-set' : '') + '" id="advr_' + m.id + '_a">' + m.away + '</button>' +
+'</div>';
+}
 }
 
 html += '</div></div>';
 return html;
+}
+
+const ADV_BONUS = 1;
+function isKO(stage){ return stage==='r32'||stage==='r16'||stage==='qf'||stage==='sf'||stage==='final'; }
+function stageRank(stage){ return {group:0,r32:1,r16:2,qf:3,sf:4,final:5}[stage] || 0; }
+function getAdvPick(pid, mid){
+const r = predictions[pid + '_' + mid + '_adv'];
+if (!r) return null;
+return (parseInt(r.home) > 0) ? 'home' : (parseInt(r.away) > 0 ? 'away' : null);
+}
+function getActualAdvancer(m){
+const ar = results[m.id + '_adv'];
+if (ar) return (parseInt(ar.home) > 0) ? 'home' : 'away';
+const r = getRes(m.id);
+if (r && parseInt(r.home) !== parseInt(r.away)) return (parseInt(r.home) > parseInt(r.away)) ? 'home' : 'away';
+const rank = stageRank(m.stage);
+for (const m2 of MATCHES){
+if (m2 === m || m2.id === 'bronze') continue;
+if (stageRank(m2.stage) <= rank) continue;
+if (m2.home === 'TBD' || m2.away === 'TBD') continue;
+if (teamKey(m2.home) === teamKey(m.home) || teamKey(m2.away) === teamKey(m.home)) return 'home';
+if (teamKey(m2.home) === teamKey(m.away) || teamKey(m2.away) === teamKey(m.away)) return 'away';
+}
+return null;
+}
+function renderAdvPicker(m){
+const myPick = getAdvPick(activePlayer, m.id);
+const act = getActualAdvancer(m);
+const locked = !!getRes(m.id) || !!act;
+let note = '';
+if (act && myPick) note = (myPick === act) ? '<span class="adv-badge adv-ok">✓ +' + ADV_BONUS + '</span>' : '<span class="adv-badge adv-no">✗ missed</span>';
+else if (act) note = '<span class="adv-badge">Advanced: ' + (act === 'home' ? m.home : m.away) + '</span>';
+const dis = locked ? ' disabled' : '';
+return '<div class="adv-pick">' +
+'<div class="adv-label">Who advances? <span class="adv-hint">(decides ties and penalties)</span> ' + note + '</div>' +
+'<div class="adv-row">' +
+'<button class="adv-btn' + (myPick === 'home' ? ' active' : '') + '" id="adv_' + m.id + '_h"' + dis + '>' + m.homeFlag + ' ' + m.home + '</button>' +
+'<button class="adv-btn' + (myPick === 'away' ? ' active' : '') + '" id="adv_' + m.id + '_a"' + dis + '>' + m.awayFlag + ' ' + m.away + '</button>' +
+'</div></div>';
+}
+async function saveAdvPick(matchId, side){
+const key = activePlayer + '_' + matchId + '_adv';
+predictions[key] = { home: side === 'home' ? 1 : 0, away: side === 'away' ? 1 : 0 };
+const { error } = await db.from('predictions').upsert(
+{ id: key, player: activePlayer, match_id: matchId + '_adv', home_score: side === 'home' ? 1 : 0, away_score: side === 'away' ? 1 : 0, updated_at: new Date().toISOString() },
+{ onConflict: 'id' }
+);
+if (error) { showToast('Save failed - check connection', true); return false; }
+return true;
+}
+async function handleAdvPick(matchId, side){
+if (!activePlayer) return;
+const ok = await saveAdvPick(matchId, side);
+if (ok) { showToast('✓ Advance pick saved!'); renderMain(); }
+}
+async function saveAdvResult(matchId, side){
+results[matchId + '_adv'] = { home: side === 'home' ? 1 : 0, away: side === 'away' ? 1 : 0 };
+const { error } = await db.from('results').upsert(
+{ match_id: matchId + '_adv', home_score: side === 'home' ? 1 : 0, away_score: side === 'away' ? 1 : 0, updated_at: new Date().toISOString() },
+{ onConflict: 'match_id' }
+);
+if (error) { showToast('Save failed - check connection', true); return false; }
+return true;
+}
+async function handleAdvResult(matchId, side){
+const ok = await saveAdvResult(matchId, side);
+if (ok) { showToast('✓ Advancer set - points updated!'); renderMain(); }
 }
 
 // ACTIONS
@@ -651,11 +759,69 @@ if(ok) updated++;
 if(updated > 0) renderMain();
 }
 
+
+// ---- KNOCKOUT AUTO-POPULATE (teams + scores from live per-date feed) ----
+const KO_ENABLED = true;
+const FLAGS = {
+"Mexico":"🇲🇽","South Africa":"🇿🇦","South Korea":"🇰🇷","Czechia":"🇨🇿","Canada":"🇨🇦","Bosnia":"🇧🇦","Qatar":"🇶🇦","Switzerland":"🇨🇭","Brazil":"🇧🇷","Morocco":"🇲🇦","Haiti":"🇭🇹","Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","USA":"🇺🇸","Paraguay":"🇵🇾","Australia":"🇦🇺","Turkiye":"🇹🇷","Germany":"🇩🇪","Curacao":"🇨🇼","Ivory Coast":"🇨🇮","Ecuador":"🇪🇨","Netherlands":"🇳🇱","Japan":"🇯🇵","Sweden":"🇸🇪","Tunisia":"🇹🇳","Belgium":"🇧🇪","Egypt":"🇪🇬","Iran":"🇮🇷","New Zealand":"🇳🇿","Spain":"🇪🇸","Cape Verde":"🇨🇻","Saudi Arabia":"🇸🇦","Uruguay":"🇺🇾","France":"🇫🇷","Senegal":"🇸🇳","Iraq":"🇮🇶","Norway":"🇳🇴","Argentina":"🇦🇷","Algeria":"🇩🇿","Austria":"🇦🇹","Jordan":"🇯🇴","Portugal":"🇵🇹","DRC":"🇨🇩","Uzbekistan":"🇺🇿","Colombia":"🇨🇴","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","Croatia":"🇭🇷","Ghana":"🇬🇭","Panama":"🇵🇦"
+};
+const KO_SLOTS = [
+{id:'r32_1',ymd:'2026-06-28',city:'losangeles'},{id:'r32_2',ymd:'2026-06-29',city:'houston'},{id:'r32_3',ymd:'2026-06-29',city:'boston'},{id:'r32_4',ymd:'2026-06-29',city:'monterrey'},
+{id:'r32_5',ymd:'2026-06-30',city:'dallas'},{id:'r32_6',ymd:'2026-06-30',city:'newyork'},{id:'r32_7',ymd:'2026-06-30',city:'mexicocity'},{id:'r32_8',ymd:'2026-07-01',city:'atlanta'},
+{id:'r32_9',ymd:'2026-07-01',city:'seattle'},{id:'r32_10',ymd:'2026-07-01',city:'sanfrancisco'},{id:'r32_11',ymd:'2026-07-02',city:'losangeles'},{id:'r32_12',ymd:'2026-07-02',city:'toronto'},
+{id:'r32_13',ymd:'2026-07-02',city:'vancouver'},{id:'r32_14',ymd:'2026-07-03',city:'dallas'},{id:'r32_15',ymd:'2026-07-03',city:'miami'},{id:'r32_16',ymd:'2026-07-03',city:'kansascity'},
+{id:'r16_1',ymd:'2026-07-04',city:'houston'},{id:'r16_2',ymd:'2026-07-04',city:'philadelphia'},{id:'r16_3',ymd:'2026-07-05',city:'newyork'},{id:'r16_4',ymd:'2026-07-05',city:'mexicocity'},
+{id:'r16_5',ymd:'2026-07-06',city:'dallas'},{id:'r16_6',ymd:'2026-07-06',city:'seattle'},{id:'r16_7',ymd:'2026-07-07',city:'atlanta'},{id:'r16_8',ymd:'2026-07-07',city:'vancouver'},
+{id:'qf_1',ymd:'2026-07-09',city:'boston'},{id:'qf_2',ymd:'2026-07-10',city:'losangeles'},{id:'qf_3',ymd:'2026-07-11',city:'miami'},{id:'qf_4',ymd:'2026-07-11',city:'kansascity'},
+{id:'sf_1',ymd:'2026-07-14',city:'dallas'},{id:'sf_2',ymd:'2026-07-15',city:'atlanta'},{id:'bronze',ymd:'2026-07-18',city:'miami'},{id:'final',ymd:'2026-07-19',city:'newyork'}
+];
+function cityFromVenue(v){
+v=String(v||'');
+const map=[['SoFi','losangeles'],['NRG','houston'],['Reliant','houston'],['Gillette','boston'],['BBVA','monterrey'],['AT&T','dallas'],['MetLife','newyork'],['Azteca','mexicocity'],['Banorte','mexicocity'],['Mercede','atlanta'],['Lumen','seattle'],['Levi','sanfrancisco'],['BMO','toronto'],['BC Place','vancouver'],['Hard Rock','miami'],['Arrowhead','kansascity'],['Lincoln Financial','philadelphia'],['Akron','guadalajara']];
+for(const pair of map){ if(v.indexOf(pair[0])!==-1) return pair[1]; }
+return '';
+}
+function koWindowDates(){
+const out=[]; const now=Date.now();
+for(let d=-1; d<=7; d++){ out.push(new Date(now + d*86400000).toISOString().slice(0,10)); }
+return out;
+}
+async function syncKnockout(){
+if(!KO_ENABLED || !isLoaded) return;
+const koByKey={}; KO_SLOTS.forEach(s=>{ koByKey[s.ymd+'|'+s.city]=s; });
+const slotById={}; MATCHES.forEach(m=>{ slotById[m.id]=m; });
+const seen={}; let events=[];
+for(const d of koWindowDates()){
+try{ const j=await fetch('https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d='+d+'&l=4429').then(x=>x.json());
+if(j && j.events) j.events.forEach(e=>{ if(!seen[e.idEvent]){ seen[e.idEvent]=1; events.push(e); } });
+}catch(e){}
+}
+let changed=false, scored=0;
+for(const e of events){
+const r=String(e.intRound||''); if(r==='1'||r==='2'||r==='3') continue;
+const city=cityFromVenue(e.strVenue); if(!city) continue;
+const s=koByKey[(e.dateEventLocal||'')+'|'+city]; if(!s) continue;
+const m=slotById[s.id]; if(!m) continue;
+const home=normTeam(e.strHomeTeam), away=normTeam(e.strAwayTeam);
+if(home && away && home!=='TBD' && away!=='TBD'){
+if(m.home!==home || m.away!==away){ m.home=home; m.away=away; m.homeFlag=FLAGS[home]||'🏳'; m.awayFlag=FLAGS[away]||'🏳'; m.homeSub=''; m.awaySub=''; changed=true; }
+}
+if(isFinishedEvent(e)){
+const hs=parseInt(e.intHomeScore), as=parseInt(e.intAwayScore);
+if(!isNaN(hs) && !isNaN(as)){
+const ex=getRes(m.id);
+if(!(ex && parseInt(ex.home)===hs && parseInt(ex.away)===as)){ const ok=await saveResultToDB(m.id, hs, as); if(ok) scored++; }
+}
+}
+}
+if(changed || scored>0) renderMain();
+}
+
 // INIT
 document.addEventListener('DOMContentLoaded', function() {
 renderPlayerChips();
 renderTabs();
-loadAll().then(() => { subscribeRealtime(); syncScores(); setInterval(syncScores, 120000); });
+loadAll().then(() => { subscribeRealtime(); syncScores(); setInterval(syncScores, 120000); syncKnockout(); setInterval(syncKnockout, 180000); });
 });
 </script>
 </body>
